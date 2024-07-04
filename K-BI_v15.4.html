@@ -1,0 +1,3419 @@
+<meta charset="utf-8">
+
+
+<form>
+    <label for="fichier">JSON exporté d'un lot : </label>
+    <input type="file" id="fichier" oninput="readFile(this)">
+    <label for="pourcent_bas"> Seuil de similarité bas : </label>
+    <input type="number" id="pourcent_bas" name="pourcent_bas" required min="0" max="101" value="101" />
+    <label for="pourcent_haut"> Seuil de similarité haut : </label>
+    <input type="number" id="pourcent_haut" name="pourcent_haut" required min="0" max="101" value="101" />
+    <label for="fichier_colo"> Colorer par hit avec un fichier CSV des hits (lancer après avoir charger un graph) :
+    </label>
+    <input type="file" id="fichier_colo" oninput="colo_hit(this)">
+</form>
+
+
+
+<p>Que voulez-vous afficher :</p>
+<form>
+    <input type="radio" id="Diagram" name="Graph" value="Diagram" checked>
+    <label for="Diagram">Graph des chemins</label>
+
+    <input type="radio" id="JSON" name="Graph" value="JSON">
+    <label for="JSON">JSON à importer dans K-NOW</label>
+</form>
+
+<form>
+    <input type="radio" id="Condi_filter" name="Graph" value="Condi_filter" checked>
+    <label for="Condi_filter">Séparer les éléments par documentId</label>
+
+    <input type="radio" id="Condi_filter_not" name="Graph" value="Condi_filter_not">
+    <label for="Condi_filter_not">Regrouper les éléments sans les différencier par documentId</label>
+</form>
+
+<FORM NAME="Choix">
+    <label>Coloration : </label>
+    <SELECT NAME="Liste" oninput="addElement()">
+        <OPTION VALUE="Colo_connect">Coloration en fonction de la connectivité
+        <OPTION VALUE="Colo_rec">Coloration en fonction de la réutilisation
+        <OPTION VALUE="Colo_start">Coloration des débuts ou fins
+        <OPTION VALUE="Colo_cond">Coloration par conditions
+        <OPTION VALUE="Colo_msg">Coloration par messages multiples
+    </SELECT>
+
+</FORM>
+
+<div id="container"></div>
+
+
+
+<form>
+    <input type="radio" id="FR" name="Language" value="FR" checked>
+    <label for="FR">Français</label>
+
+    <input type="radio" id="EN" name="Language" value="EN">
+    <label for="EN">English</label>
+</form>
+<form>
+    <input type="radio" id="with_undefined" name="exclusion" value="with_undefined" checked>
+    <label for="with_undefined">Avec "undefined"</label>
+
+    <input type="radio" id="without_undefined" name="exclusion" value="without_undefined">
+    <label for="without_undefined">Sans "undefined"</label>
+
+</form>
+
+<p>Lors de la sélection :</p>
+<form>
+    <input type="radio" id="select_guidage" name="selection_guidage" value="select_guidage" checked>
+    <label for="select_guidage">Montrer les guidages des éléments dans la console</label>
+
+    <input type="radio" id="select_sans_guidage" name="selection_guidage" value="select_sans_guidage">
+    <label for="select_sans_guidage">Ne pas montrer les guidages des éléments dans la console</label>
+
+</form>
+
+<form>
+    <input type="radio" id="select_messages" name="selection_messages" value="select_messages" checked>
+    <label for="select_messages">Montrer les messages des éléments dans la console</label>
+
+    <input type="radio" id="select_sans_messages" name="selection_messages" value="select_sans_messages">
+    <label for="select_sans_messages">Ne pas montrer les messages des éléments dans la console</label>
+
+</form>
+
+<form>
+    <input type="radio" id="select_conditions" name="selection_conditions" value="select_conditions" checked>
+    <label for="select_conditions">Montrer les conditions des éléments dans la console</label>
+
+    <input type="radio" id="select_sans_conditions" name="selection_conditions" value="select_sans_conditions">
+    <label for="select_sans_conditions">Ne pas montrer les conditions des éléments dans la console</label>
+
+</form>
+
+<div>
+    <input type="button" value="Run" onclick="lancement()">
+
+</div>
+
+
+<meta charset="utf-8" />
+<title>K-BI</title>
+<!-- Include the ECharts file you just downloaded -->
+<!--<script src="C:\Users\ValentinJousseaume\node_modules\echarts\dist\echarts.js"></script>-->
+<script src="echarts\dist\echarts.js"></script>
+
+
+<!-- Prepare a DOM with a defined width and height for ECharts -->
+
+<style>
+    #main {
+        width: 1600px;
+        height: 900px;
+    }
+</style>
+
+<div id="main"></div>
+
+<div id="container_guidages"></div>
+
+
+
+
+<script>
+    var liste_des_etapes = []
+
+    var ia_database_association = []
+
+
+    function addElement() {
+
+        if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_cond") {
+
+            let liste_des_conditions = []
+            let liste_des_rec_cond = []
+
+
+            if (liste_des_etapes.length > 0) {
+                for (let item of liste_des_etapes) {
+
+                    for (let k = 0; k < item.conditions.length; k++) {
+
+                        let trouve = false
+                        for (let kk = 0; kk < liste_des_conditions.length; kk++) {
+
+                            if (item.conditions[k] === liste_des_conditions[kk]) {
+                                trouve = true
+                                liste_des_rec_cond[kk] += 1
+                            }
+
+
+                        }
+
+                        if (!trouve) {
+                            liste_des_conditions.push(item.conditions[k])
+                            liste_des_rec_cond.push(1)
+                        }
+                    }
+
+                }
+
+            }
+            let liste_des_conditions2 = []
+            let max_cond_rec = 0
+            let indice_max = 0
+
+            for (let inutile of liste_des_conditions) {
+                max_cond_rec = 0
+
+                for (let jj = 0; jj < liste_des_rec_cond.length; jj++) {
+                    if (max_cond_rec < liste_des_rec_cond[jj]) {
+                        max_cond_rec = liste_des_rec_cond[jj]
+                        indice_max = jj
+                    }
+                }
+
+                liste_des_conditions2.push(liste_des_conditions[indice_max])
+                liste_des_conditions.splice(indice_max, 1)
+                liste_des_rec_cond.splice(indice_max, 1)
+
+            }
+
+
+
+            let values = liste_des_conditions2;
+
+            if (document.getElementById("condi") != undefined) {
+                document.getElementById("condi").remove()
+                document.getElementById("label_condi").remove()
+
+            }
+
+            liste_des_conditions2.sort()
+
+            let select = document.createElement("select");
+            select.name = "condi";
+            select.id = "condi"
+
+            for (const val of values) {
+                var option_condi = document.createElement("option");
+                option_condi.value = val;
+                option_condi.text = val.charAt(0).toUpperCase() + val.slice(1);
+                select.appendChild(option_condi);
+            }
+
+            let label = document.createElement("label");
+            label.innerHTML = "Choisir une condition à observer : "
+            label.htmlFor = "condi";
+            label.id = "label_condi"
+
+            document.getElementById("container").appendChild(label).appendChild(select);
+
+        }
+    }
+
+    // crée un nouvel élément div
+
+    function getByKey(key, list_json) {
+
+
+        for (x of list_json) {
+
+            if (x.key === key) {
+                return x.value
+
+            }
+        }
+    }
+
+
+    var obj_json_source = ""
+    var file
+
+    function simi_msg(string1, string2) {
+        let liste1 = string1.split(" ")
+        let liste2 = string2.split(" ")
+        let score = 0
+        if (liste2.length > liste1.length) {
+            let temp = JSON.parse(JSON.stringify(liste1))
+            liste1 = JSON.parse(JSON.stringify(liste2))
+            liste2 = temp
+        }
+
+        for (let i = 0; i < liste1.length; i++) {
+            let s_temp = lev(liste1[i].split(""), liste2[Math.trunc(i * liste2.length / liste1.length)].split("")) / liste1[i].split("").length
+
+            if (1 - s_temp > 0.5) {
+                score += s_temp
+                liste1[i] = liste2[Math.trunc(i * liste2.length / liste1.length)]
+            }
+        }
+
+        return 1 - (lev(liste1, liste2) + score) / liste1.length
+    }
+
+    function lev(liste_de_mots1, liste_de_mots2) {
+        let track = Array(liste_de_mots2.length + 1).fill(null).map(() =>
+            Array(liste_de_mots1.length + 1).fill(null));
+        for (let i = 0; i <= liste_de_mots1.length; i += 1) {
+            track[0][i] = i;
+        }
+        for (let j = 0; j <= liste_de_mots2.length; j += 1) {
+            track[j][0] = j;
+        }
+        for (let j = 1; j <= liste_de_mots2.length; j += 1) {
+            for (let i = 1; i <= liste_de_mots1.length; i += 1) {
+                let  indicator = liste_de_mots1[i - 1] === liste_de_mots2[j - 1] ? 0 : 1;
+                track[j][i] = Math.min(
+                    track[j][i - 1] + 1, // deletion
+                    track[j - 1][i] + 1, // insertion
+                    track[j - 1][i - 1] + indicator, // substitution
+                );
+            }
+        }
+        return track[liste_de_mots2.length][liste_de_mots1.length];
+
+    }
+
+
+    function readFile(input) {
+        file = input.files[0];
+
+        let reader = new FileReader();
+
+        reader.readAsText(file);
+
+        reader.onload = function () {
+            var json_source = reader.result;
+            obj_json_source = JSON.parse(json_source);
+            if (obj_json_source.guidances == undefined) {
+                obj_json_source = obj_json_source.batch
+            }
+
+            liste_des_etapes = [{
+                nom: "blank",
+                mots: ["blank"],
+                recurrence_mots: [1],
+                position_attache: ["right"],
+                recurrence_pos_attache: [1],
+                position_fleche: ["left-middle"],
+                recurrence_pos_fleche: [1],
+                etapes_suivantes: ["blank"],
+                recurrence_etapes_suivantes: [1],
+                conditions: ["blank"],
+                recurrence_conditions: [0],
+                debut: 0,
+                fin: 0,
+                optionnel: 0,
+                guidages: [{
+                    nom: "blank",
+                    position: [0]
+                }],
+                recurrence_guidages: [0]
+            }]
+
+            if (document.getElementById("Condi_filter").checked) {
+
+                for (let x of obj_json_source.guidances) {
+                    for (let y of x.steps) {
+                        if (y.action.data.elementId != null) {
+                            for (let condi_tempo of y.conditions) {
+                                if (JSON.parse(condi_tempo).type === "documentId") {
+                                    y.action.data.elementId = y.action.data.elementId + " (" + JSON.parse(condi_tempo).value + ")"
+                                }
+                            }
+
+                        }
+                        if (y.translations != null) {
+                            let json_conditions = getByKey("conditions", y.identifications)
+
+                            let liste_conditions = json_conditions != undefined ? JSON.parse(getByKey("conditions", y.identifications)) : []
+                            for (let condi_tempo of liste_conditions) {
+                                if (JSON.parse(condi_tempo).type === "documentId") {
+                                    for (let element_ident of y.identifications) {
+                                        if (element_ident.key === "elementId") {
+                                            element_ident.value = element_ident.value + " (" + JSON.parse(condi_tempo).value + ")"
+                                        }
+
+                                    }
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            for (let x of obj_json_source.guidances) {
+
+                var j = 0
+                for (let y of x.steps) {
+                    if (y.action.data.elementId != null) {
+                        var found = false
+
+                        for (let k = 0; k < liste_des_etapes.length; k++) {
+                            if (liste_des_etapes[k].nom === y.action.data.elementId) {
+
+
+                                a = y.action.data.body.replaceAll("<p>", "").replaceAll("</p>", "")
+                                // injection des mots du guidage
+
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].mots) {
+                                    if (a === b) {
+                                        liste_des_etapes[k].recurrence_mots[m] += 1;
+                                        mot_found = true;
+
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].mots.push(a);
+                                    liste_des_etapes[k].recurrence_mots.push(1);
+
+                                }
+
+
+                                //  injection des position_attache
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].position_attache) {
+                                    if (y.action.data.attachPosition === b) {
+                                        liste_des_etapes[k].recurrence_pos_attache[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].position_attache.push(y.action.data.attachPosition);
+                                    liste_des_etapes[k].recurrence_pos_attache.push(1);
+
+                                }
+
+
+                                //  injection des position_fleches
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].position_fleche) {
+                                    if (y.action.data.arrowPosition === b) {
+                                        liste_des_etapes[k].recurrence_pos_fleche[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].position_fleche.push(y.action.data.arrowPosition);
+                                    liste_des_etapes[k].recurrence_pos_fleche.push(1);
+
+                                }
+
+
+
+
+
+                                //  injection des etapes_suivantes
+
+
+                                if (x.steps.length > j + 1) {
+
+                                    let liste_etapes_suivantes = [x.steps[j + 1].action.data.elementId]
+                                    let k3 = j + 1
+
+                                    while (k3 + 1 < x.steps.length && x.steps[k3].optional) {
+                                        liste_etapes_suivantes.push(x.steps[k3 + 1].action.data.elementId)
+                                        k3 += 1
+                                    }
+
+
+                                    var mot_found = false
+
+                                    for (let b2 of liste_etapes_suivantes) {
+                                        var m = 0
+                                        for (let b of liste_des_etapes[k].etapes_suivantes) {
+                                            if (b2 === b) {
+                                                liste_des_etapes[k].recurrence_etapes_suivantes[m] += 1;
+                                                mot_found = true;
+
+                                            }
+                                            m += 1
+                                        }
+                                    }
+
+                                    if (!mot_found) {
+                                        for (etape_suivantes_ajoutee of liste_etapes_suivantes) {
+                                            liste_des_etapes[k].etapes_suivantes.push(etape_suivantes_ajoutee);
+                                            liste_des_etapes[k].recurrence_etapes_suivantes.push(1);
+
+                                        }
+
+                                    }
+
+
+
+                                }
+
+                                // injection des conditions 
+                                for (let valeur_courante of y.conditions) {
+
+                                    var mot_found = false
+                                    var m = 0
+                                    for (let b of liste_des_etapes[k].conditions) {
+                                        if (valeur_courante === b) {
+                                            liste_des_etapes[k].recurrence_conditions[m] += 1;
+                                            mot_found = true;
+
+
+                                        }
+                                        m += 1
+                                    }
+
+                                    if (!mot_found) {
+                                        liste_des_etapes[k].conditions.push(valeur_courante);
+                                        liste_des_etapes[k].recurrence_conditions.push(1);
+
+                                    }
+
+                                }
+
+                                liste_des_etapes[k].debut += y.startingPoint * 1
+                                liste_des_etapes[k].optionnel += y.optional * 1
+
+                                // injection fin
+
+                                if (x.steps.length <= j + 1) {
+                                    liste_des_etapes[k].fin += 1
+                                }
+                                //  injection des guidages
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].guidages) {
+                                    if (x.pid === b.nom) {
+                                        liste_des_etapes[k].guidages[m].position.push(j)
+                                        liste_des_etapes[k].recurrence_guidages[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].guidages.push({
+                                        nom: x.pid,
+                                        position: [j]
+                                    });
+
+                                    liste_des_etapes[k].recurrence_guidages.push(1);
+
+                                }
+
+
+                                found = true;
+                                break
+                            }
+                        }
+
+
+                        if (!found) {
+
+                            liste_de_mots = y.action.data.body.replaceAll("<p>", "").replaceAll("</p>", "")
+
+                            let liste_rec = []
+
+                            for (let m = 0; m < y.conditions.length; m++) {
+                                liste_rec.push(1)
+                            }
+
+
+                            if (x.steps.length <= j + 1) {
+
+                                var etape = {
+                                    nom: y.action.data.elementId,
+                                    mots: [liste_de_mots],
+                                    recurrence_mots: [1],
+                                    position_attache: [y.action.data.attachPosition],
+                                    recurrence_pos_attache: [1],
+                                    position_fleche: [y.action.data.arrowPosition],
+                                    recurrence_pos_fleche: [1],
+                                    etapes_suivantes: [],
+                                    recurrence_etapes_suivantes: [],
+                                    conditions: y.conditions,
+                                    recurrence_conditions: liste_rec,
+                                    debut: y.startingPoint * 1,
+                                    fin: 1,
+                                    optionnel: y.optional * 1,
+                                    guidages: [{
+                                        nom: x.pid,
+                                        position: [j]
+                                    }],
+                                    recurrence_guidages: [1],
+
+
+
+                                }
+
+                                liste_des_etapes.push(etape);
+                            }
+
+                            if (x.steps.length > j + 1) {
+
+                                let liste_des_1 = [1]
+                                let liste_etapes_suivantes = [x.steps[j + 1].action.data.elementId]
+                                let k3 = j + 1
+
+                                while (k3 + 1 < x.steps.length && x.steps[k3].optional) {
+                                    liste_etapes_suivantes.push(x.steps[k3 + 1].action.data.elementId)
+                                    liste_des_1.push(1)
+                                    k3 += 1
+                                }
+
+                                var etape = {
+                                    nom: y.action.data.elementId,
+                                    mots: [liste_de_mots],
+                                    recurrence_mots: [1],
+                                    position_attache: [y.action.data.attachPosition],
+                                    recurrence_pos_attache: [1],
+                                    position_fleche: [y.action.data.arrowPosition],
+                                    recurrence_pos_fleche: [1],
+                                    etapes_suivantes: liste_etapes_suivantes,
+                                    recurrence_etapes_suivantes: liste_des_1,
+                                    conditions: y.conditions,
+                                    recurrence_conditions: liste_rec,
+                                    debut: y.startingPoint * 1,
+                                    fin: 0,
+                                    optionnel: y.optional * 1,
+                                    guidages: [{
+                                        nom: x.pid,
+                                        position: [j]
+                                    }],
+                                    recurrence_guidages: [1]
+
+                                }
+
+                                liste_des_etapes.push(etape);
+
+                            }
+
+                        }
+
+                    }
+                    if (y.translations != null) {
+                        var found = false
+
+                        for (let k = 0; k < liste_des_etapes.length; k++) {
+                            if (liste_des_etapes[k].nom === getByKey("elementId", y.identifications)) {
+
+                                a = ""
+
+                                for (let names of y.translations)
+                                    a += a === "" ? names.translation.replaceAll("<p>", "").replaceAll("</p>", "") : " / " + names.translation.replaceAll("<p>", "").replaceAll("</p>", "")
+                                // injection des mots du guidage
+
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].mots) {
+                                    if (a === b) {
+                                        liste_des_etapes[k].recurrence_mots[m] += 1;
+                                        mot_found = true;
+
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].mots.push(a);
+                                    liste_des_etapes[k].recurrence_mots.push(1);
+
+                                }
+
+
+                                //  injection des position_attache
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].position_attache) {
+                                    if (getByKey("attachPosition", y.identifications) === b) {
+                                        liste_des_etapes[k].recurrence_pos_attache[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].position_attache.push(getByKey("attachPosition", y.identifications));
+                                    liste_des_etapes[k].recurrence_pos_attache.push(1);
+
+                                }
+
+
+                                //  injection des position_fleches
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].position_fleche) {
+                                    if (getByKey("arrowPosition", y.identifications) === b) {
+                                        liste_des_etapes[k].recurrence_pos_fleche[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].position_fleche.push(getByKey("arrowPosition", y.identifications));
+                                    liste_des_etapes[k].recurrence_pos_fleche.push(1);
+
+                                }
+
+                                //  injection des etapes_suivantes
+
+                                if (x.steps.length > j + 1) {
+
+                                    let liste_etapes_suivantes = [getByKey("elementId", x.steps[j + 1].identifications)]
+                                    let k3 = j + 1
+
+                                    while (k3 + 1 < x.steps.length && x.steps[k3].optional) {
+                                        liste_etapes_suivantes.push(getByKey("elementId", x.steps[k3 + 1].identifications))
+                                        k3 += 1
+                                    }
+
+
+                                    var mot_found = false
+
+                                    for (let b2 of liste_etapes_suivantes) {
+                                        var m = 0
+                                        for (let b of liste_des_etapes[k].etapes_suivantes) {
+                                            if (b2 === b) {
+                                                liste_des_etapes[k].recurrence_etapes_suivantes[m] += 1;
+                                                mot_found = true;
+
+                                            }
+                                            m += 1
+                                        }
+                                    }
+
+                                    if (!mot_found) {
+                                        for (etape_suivantes_ajoutee of liste_etapes_suivantes) {
+                                            liste_des_etapes[k].etapes_suivantes.push(etape_suivantes_ajoutee);
+                                            liste_des_etapes[k].recurrence_etapes_suivantes.push(1);
+
+                                        }
+
+                                    }
+
+                                }
+
+                                // injection des conditions 
+                                let json_conditions = getByKey("conditions", y.identifications)
+
+                                let liste_conditions = json_conditions != undefined ? JSON.parse(getByKey("conditions", y.identifications)) : []
+
+                                for (let valeur_courante of liste_conditions) {
+
+                                    var mot_found = false
+                                    var m = 0
+                                    for (let b of liste_des_etapes[k].conditions) {
+                                        if (valeur_courante === b) {
+                                            liste_des_etapes[k].recurrence_conditions[m] += 1;
+                                            mot_found = true;
+
+
+                                        }
+                                        m += 1
+                                    }
+
+                                    if (!mot_found) {
+                                        liste_des_etapes[k].conditions.push(valeur_courante);
+                                        liste_des_etapes[k].recurrence_conditions.push(1);
+
+                                    }
+
+                                }
+
+                                liste_des_etapes[k].debut += y.startingPoint * 1
+                                liste_des_etapes[k].optionnel += y.optional * 1
+
+                                if (x.steps.length <= j + 1) {
+                                    liste_des_etapes[k].fin += 1
+                                }
+
+                                //  injection des guidages
+
+                                var mot_found = false
+                                var m = 0
+                                for (let b of liste_des_etapes[k].guidages) {
+                                    if (x.pid === b.nom) {
+                                        liste_des_etapes[k].guidages[m].position.push(j)
+                                        liste_des_etapes[k].recurrence_guidages[m] += 1;
+                                        mot_found = true;
+
+                                    }
+                                    m += 1
+                                }
+
+                                if (!mot_found) {
+                                    liste_des_etapes[k].guidages.push({
+                                        nom: x.pid,
+                                        position: [j]
+                                    });
+                                    liste_des_etapes[k].recurrence_guidages.push(1);
+
+                                }
+
+
+                                found = true;
+                                break
+                            }
+                        }
+
+
+                        if (!found) {
+
+                            liste_de_mots = y.translations[0].translation.replaceAll("<p>", "").replaceAll("</p>", "")
+
+                            let json_conditions = getByKey("conditions", y.identifications)
+
+                            let liste_conditions = json_conditions != undefined ? JSON.parse(getByKey("conditions", y.identifications)) : []
+                            let liste_rec_cond = []
+
+
+                            for (let m = 0; m < liste_conditions.length; m++) {
+
+                                liste_rec_cond.push(1)
+                            }
+
+
+                            if (x.steps.length <= j + 1) {
+
+                                var etape = {
+                                    nom: getByKey("elementId", y.identifications),
+                                    mots: [liste_de_mots],
+                                    recurrence_mots: [1],
+                                    position_attache: [getByKey("attachPosition", y.identifications)],
+                                    recurrence_pos_attache: [1],
+                                    position_fleche: [getByKey("arrowPosition", y.identifications)],
+                                    recurrence_pos_fleche: [1],
+                                    etapes_suivantes: [],
+                                    recurrence_etapes_suivantes: [],
+                                    conditions: liste_conditions,
+                                    recurrence_conditions: liste_rec_cond,
+                                    debut: y.startingPoint * 1,
+                                    optionnel: y.optional * 1,
+                                    fin: 1,
+                                    guidages: [{
+                                        nom: x.pid,
+                                        position: [j]
+                                    }],
+                                    recurrence_guidages: [1]
+
+                                }
+
+                                liste_des_etapes.push(etape);
+                            }
+
+                            if (x.steps.length > j + 1) {
+
+                                let liste_des_1 = [1]
+                                let liste_etapes_suivantes = [getByKey("elementId", x.steps[j + 1].identifications)]
+                                let k3 = j + 1
+
+                                while (k3 + 1 < x.steps.length && x.steps[k3].optional) {
+                                    liste_etapes_suivantes.push(getByKey("elementId", x.steps[k3 + 1].identifications))
+                                    liste_des_1.push(1)
+                                    k3 += 1
+                                }
+
+                                var etape = {
+                                    nom: getByKey("elementId", y.identifications),
+                                    mots: [liste_de_mots],
+                                    recurrence_mots: [1],
+                                    position_attache: [getByKey("attachPosition", y.identifications)],
+                                    recurrence_pos_attache: [1],
+                                    position_fleche: [getByKey("arrowPosition", y.identifications)],
+                                    recurrence_pos_fleche: [1],
+                                    etapes_suivantes: liste_etapes_suivantes,
+                                    recurrence_etapes_suivantes: liste_des_1,
+                                    conditions: liste_conditions,
+                                    recurrence_conditions: liste_rec_cond,
+                                    debut: y.startingPoint * 1,
+                                    optionnel: y.optional * 1,
+                                    fin: 0,
+                                    guidages: [{
+                                        nom: x.pid,
+                                        position: [j]
+                                    }],
+                                    recurrence_guidages: [1]
+
+                                }
+
+                                liste_des_etapes.push(etape);
+
+                            }
+
+                        }
+                    }
+                    j += 1
+
+
+
+                }
+            }
+
+            liste_des_etapes.splice(0, 1)
+
+
+
+        }
+    }
+
+
+
+
+    var colo_hit_data = []
+
+    function colo_hit(input2) {
+        file2 = input2.files[0];
+        var colo_hit_running = true
+        function CSVToArray(strData, strDelimiter) {
+            // Check to see if the delimiter is defined. If not,
+            // then default to comma.
+            strDelimiter = (strDelimiter || ",");
+
+            // Create a regular expression to parse the CSV values.
+            var objPattern = new RegExp(
+                (
+                    // Delimiters.
+                    "(\\" + strDelimiter + "|\\r?\\n|\\r|^)" +
+
+                    // Quoted fields.
+                    "(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|" +
+
+                    // Standard fields.
+                    "([^\"\\" + strDelimiter + "\\r\\n]*))"
+                ),
+                "gi"
+            );
+
+
+            // Create an array to hold our data. Give the array
+            // a default empty first row.
+            var arrData = [[]];
+
+            // Create an array to hold our individual pattern
+            // matching groups.
+            var arrMatches = null;
+
+
+            // Keep looping over the regular expression matches
+            // until we can no longer find a match.
+            while (arrMatches = objPattern.exec(strData)) {
+
+                // Get the delimiter that was found.
+                var strMatchedDelimiter = arrMatches[1];
+
+                // Check to see if the given delimiter has a length
+                // (is not the start of string) and if it matches
+                // field delimiter. If id does not, then we know
+                // that this delimiter is a row delimiter.
+                if (
+                    strMatchedDelimiter.length &&
+                    strMatchedDelimiter !== strDelimiter
+                ) {
+
+                    // Since we have reached a new row of data,
+                    // add an empty row to our data array.
+                    arrData.push([]);
+
+                }
+
+                var strMatchedValue;
+
+                // Now that we have our delimiter out of the way,
+                // let's check to see which kind of value we
+                // captured (quoted or unquoted).
+                if (arrMatches[2]) {
+
+                    // We found a quoted value. When we capture
+                    // this value, unescape any double quotes.
+                    strMatchedValue = arrMatches[2].replaceAll(
+                        new RegExp("\"\"", "g"),
+                        "\""
+                    );
+
+                } else {
+
+                    // We found a non-quoted value.
+                    strMatchedValue = arrMatches[3];
+
+                }
+
+
+                // Now that we have our value string, let's add
+                // it to the data array.
+                arrData[arrData.length - 1].push(strMatchedValue);
+            }
+
+            // Return the parsed data.
+            return (arrData);
+        }
+
+        let reader2 = new FileReader();
+
+        reader2.readAsText(file2);
+
+        reader2.onload = function () {
+
+            let data_hits = CSVToArray(reader2.result)
+            let data_hits_table = []
+
+            for (let x of data_hits) {
+
+                data_hits_table.push(x[0].split(";"))
+            }
+            data_hits_table.shift()
+
+
+
+
+
+
+            for (let x of data_hits_table) {
+                if (x[2] != undefined) {
+                    if (x[2][0] != undefined) {
+
+                        if (x[2][0] === 'G' && x[3] === "guidance_step") {
+                            let trouve = false
+
+                            for (let i = 0; i < colo_hit_data.length; i++) {
+                                if (colo_hit_data[i].nom === x[2]) {
+                                    trouve = true
+                                    colo_hit_data[i].rec += 1
+                                    colo_hit_data[i].date.push(x[0])
+                                }
+                            }
+
+                            if (!trouve) {
+                                colo_hit_data.push({
+                                    nom: x[2],
+                                    rec: 1,
+                                    date: [x[0]]
+                                })
+
+                            }
+
+                        }
+                    }
+                }
+            }
+
+            console.log(colo_hit_data)
+
+
+
+
+        }
+    }
+
+    var liste_selection = {
+        liste: [],
+        fichier: ""
+    }
+
+    function lancement() {
+
+
+        let compteur_messages = 0 //
+        let moyenne_messages_etapes = 0 //
+        let mediane_messages_etapes = 0
+        let nb_etapes_plusieurs_messages = 0 //
+        //let moyenne_rec_int_etapes = 0 //
+        //let mediane_rec_int_etapes = 0 //
+        //let c_moyenne_rec = 0
+        let moyenne_rec_etapes = 0 //
+        let mediane_rec_etapes = 0 //
+
+
+
+
+
+
+        let copie_liste = JSON.parse(JSON.stringify(liste_des_etapes))
+        let liste_mediane = []
+
+
+
+
+        for (let etape of liste_des_etapes) {
+
+
+            moyenne_messages_etapes += etape.mots.length / liste_des_etapes.length
+
+            if (etape.mots.length > 1) {
+                nb_etapes_plusieurs_messages += 1
+
+            }
+            let s = 0
+            for (let rec of etape.recurrence_mots) {
+                s += rec
+                //c_moyenne_rec += 1
+                //moyenne_rec_int_etapes += rec
+            }
+            moyenne_rec_etapes += s / liste_des_etapes.length
+
+            for (let messages of etape.mots) {
+                compteur_messages += 1
+
+
+            }
+
+        }
+
+        //moyenne_rec_int_etapes = moyenne_rec_int_etapes / c_moyenne_rec
+
+
+
+        copie_liste = JSON.parse(JSON.stringify(liste_des_etapes))
+        liste_mediane = []
+
+        for (let inutile1 of liste_des_etapes) {
+            let max_mediane = 0
+            let index_max = 0
+            for (let x = 0; x < copie_liste.length; x++) {
+
+                let s = 0
+                for (let rec of copie_liste[x].recurrence_mots) {
+                    s += rec
+                }
+
+                if (s > max_mediane) {
+                    max_mediane = s
+                    index_max = x
+                }
+            }
+            liste_mediane.push(max_mediane)
+            copie_liste.splice(index_max, 1)
+
+        }
+        mediane_rec_etapes = liste_mediane[parseInt(liste_mediane.length / 2)]
+
+
+        copie_liste = JSON.parse(JSON.stringify(liste_des_etapes))
+        liste_mediane = []
+
+        for (let inutile1 of liste_des_etapes) {
+            let max_mediane = 0
+            let index_max = 0
+            for (let x = 0; x < copie_liste.length; x++) {
+                if (copie_liste[x].mots.length > max_mediane) {
+                    max_mediane = copie_liste[x].mots.length
+                    index_max = x
+                }
+            }
+            liste_mediane.push(max_mediane)
+            copie_liste.splice(index_max, 1)
+
+        }
+        mediane_messages_etapes = liste_mediane[parseInt(liste_mediane.length / 2)]
+
+
+
+        let moyenne_taille_guidage = 0
+        let mediane_taille_guidage = 0
+        let somme_etapes = 0
+
+        for (let x of obj_json_source.guidances) {
+            somme_etapes += x.steps.length
+            moyenne_taille_guidage += x.steps.length / obj_json_source.guidances.length
+        }
+
+
+        copie_liste = JSON.parse(JSON.stringify(obj_json_source.guidances))
+        liste_mediane = []
+
+        for (let inutile1 of obj_json_source.guidances) {
+            let max_mediane = 0
+            let index_max = 0
+            for (let x = 0; x < copie_liste.length; x++) {
+                if (copie_liste[x].steps.length > max_mediane) {
+                    max_mediane = copie_liste[x].steps.length
+                    index_max = x
+                }
+            }
+            liste_mediane.push(max_mediane)
+            copie_liste.splice(index_max, 1)
+
+        }
+        mediane_taille_guidage = liste_mediane[parseInt(liste_mediane.length / 2)]
+
+
+
+        let liste_warning = []
+        let liste_tous_messages = []
+
+        for (let etape_int of liste_des_etapes) {
+            for (let item_int of etape_int.mots) {
+                liste_tous_messages.push({
+                    element: etape_int.nom,
+                    message: item_int
+                })
+            }
+        }
+
+        let liste_de_mots1 = []
+        let liste_de_mots2 = []
+        let score_simi = 0
+        let warn_first_time = false
+        console.clear()
+
+        if (document.getElementById("pourcent_bas").value <= 100) {
+
+            for (let k1 = 0; k1 < liste_tous_messages.length; k1++) {
+                liste_de_mots1 = liste_tous_messages[k1].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                    "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                        "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                            "<em>", "").replaceAll("&#39;", "'")
+
+                for (let k2 = k1 + 1; k2 < liste_tous_messages.length; k2++) {
+
+
+                    liste_de_mots2 = liste_tous_messages[k2].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                        "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                            "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                "<em>", "").replaceAll("&#39;", "'")
+
+
+                    score_simi = 0
+                    if (liste_tous_messages[k2].element !== liste_tous_messages[k1].element){
+
+                        score_simi = simi_msg(liste_de_mots1, liste_de_mots2)
+                    }
+
+                    if ((score_simi >= document.getElementById("pourcent_bas").value / 100) && (score_simi <= document.getElementById("pourcent_haut").value / 100)) {
+                        if (!warn_first_time) {
+                            console.warn("Messages similaires dans différents éléments :")
+                            console.log("")
+                            warn_first_time = true
+                        }
+                        console.warn("Similarité : " + parseInt(score_simi * 10000) / 100 + "%")
+                        console.log("Message n°1 : " + liste_tous_messages[k1].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'"))
+                        console.log("Message n°2 : " + liste_tous_messages[k2].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'"))
+                        console.log("Element n°1 : " + liste_tous_messages[k1].element.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'"))
+                        console.log("Element n°2 : " + liste_tous_messages[k2].element.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'"))
+                        console.log("")
+                    }
+
+
+
+                }
+
+            }
+        }
+
+
+
+
+
+
+        console.log("%cNom du batch : " + file.name, "color:#000000;font-weight:bold;")
+        console.log("")
+
+        console.log("%cMétriques :", "color:#000000;font-weight:bold;")
+        console.log("Nombre d'éléments d'attache : " + parseInt(100 * liste_des_etapes.length) / 100);
+        console.log("Nombre de guidages : " + parseInt(100 * obj_json_source.guidances.length) / 100);
+        console.log("Nombre d'étapes : " + parseInt(100 * somme_etapes) / 100)
+        console.log("Nombre d'éléments d'attache avec plusieurs messages : " + parseInt(100 * nb_etapes_plusieurs_messages) / 100);
+        console.log("Nombre de messages différents par élément cumulés : " + parseInt(100 * compteur_messages) / 100);
+        console.log(" ")
+        console.log("Moyenne du nombre d'étapes par guidage : " + parseInt(100 * moyenne_taille_guidage) / 100);
+        console.log("Médiane du nombre d'étapes par guidage : " + parseInt(100 * mediane_taille_guidage) / 100);
+        console.log("Moyenne du nombre de messages pour un élément d'attache : " + parseInt(100 * moyenne_messages_etapes) / 100);
+        console.log("Médiane du nombre de messages pour un élément d'attache : " + parseInt(100 * mediane_messages_etapes) / 100);
+        //console.log("Moyenne de réutilisation d'un message par élément d'attache : " + moyenne_rec_int_etapes);
+        console.log("Moyenne de réutilisation d'un élément d'attache : " + parseInt(100 * moyenne_rec_etapes) / 100);
+        console.log("Médiane de réutilisation d'un élément d'attache : " + parseInt(100 * mediane_rec_etapes) / 100);
+
+        /*
+        for (let etape of liste_des_etapes) {
+
+            console.log(etape)
+        }
+        */
+
+
+        //__________________________________________________________________________________________________________________________________________________________________________________________
+        if (document.getElementById("JSON").checked) {
+
+            document.write('{<br/>')
+            document.write('"name": "Magasin",<br/>')
+            document.write('"status": "online",<br/>')
+            document.write('"diffusionStartDate": 1673913600000,<br/>')
+            document.write('"conditions": [],<br/>')
+            document.write('"publications": [],<br/>')
+            document.write('"guidances": [<br/>')
+            document.write('{<br/>')
+            document.write('"pid": "G20230117-00",<br/>')
+            document.write('"author": "vjousseaume@knowmore.fr",<br/>')
+            document.write('"status": "on",<br/>')
+            document.write('"name": "Magasin d etapes",<br/>')
+            document.write('"editionDate": 1674491492204,<br/>')
+            document.write('"panelIcon": "guidance",<br/>')
+            document.write('"feedbackToggle": false,<br/>')
+            document.write('"followingPid": "",<br/>')
+            document.write('"steps": [<br/>')
+
+
+            liste_des_etapes2 = []
+
+            j = 0
+            let longueur = liste_des_etapes.length
+            for (let k = 0; k < longueur; k++) {
+                t = 0
+                indice = 0
+                iii = 0
+                for (let etape of liste_des_etapes) {
+                    somme = 0
+                    for (let element of etape.recurrence_pos_attache) {
+                        somme += element
+                    }
+
+                    if (somme > t) {
+                        t = somme
+                        indice = iii
+                    }
+                    iii += 1
+
+                }
+                liste_des_etapes2.push(liste_des_etapes[indice])
+                liste_des_etapes.splice(indice, 1)
+                j += 1
+            }
+
+
+            j = 0
+            l = liste_des_etapes2.length
+
+            for (let etape of liste_des_etapes2) {
+
+                i = 0
+                v = 0
+                x = 0
+                for (let element of etape.recurrence_mots) {
+                    if (element > v) {
+                        x = i
+                        v = element
+
+                    }
+                    i += 1
+                }
+
+
+                document.write('{<br/>')
+                document.write('"optional": false,<br/>')
+                document.write('"startingPoint": true,<br/>')
+                document.write('"endingPoint": false,<br/>')
+                document.write('"action": {<br/>')
+                document.write('"type": "guide",<br/>')
+                document.write('"data": {<br/>')
+                document.write('"imageAreaSize": "small",<br/>')
+                document.write('"width": "160",<br/>')
+                document.write('"imageFillingStyle": "contain",<br/>')
+                document.write('"imageLayout": "none"<br/>')
+                document.write('},<br/>')
+                document.write('"mediaItems": []<br/>')
+                document.write('},<br/>')
+                document.write('"editionDate": 1674036787754,<br/>')
+                document.write('"translations": [<br/>')
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "body",<br/>')
+
+                var mots_courant = etape.mots[x]
+
+                for (let k = 0; k < mots_courant.length; k++) {
+                    mots_courant = mots_courant.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                        "&ltstrong&gt").replaceAll("</strong>", "&lt/strong&gt").replaceAll("<p>", "&ltp&gt").replaceAll("</p>", "&lt/p&gt").replaceAll(
+                            "<ul>", "&ltul&gt").replaceAll("</ul>", "&lt/ul&gt").replaceAll("<li>", "&ltli&gt").replaceAll("</li>", "&lt/li&gt").replaceAll("</em>", "&lt/em&gt").replaceAll(
+                                "<em>", "&ltem&gt").replaceAll('&#34;', '"').replaceAll("&#39;", "'")
+
+                }
+                mots_courant = '&ltp&gt' + mots_courant + '&lt/p&gt'
+                document.write('"translation": ' + JSON.stringify(mots_courant) + '<br/>')
+                document.write('},<br/>')
+                document.write('{<br/>')
+                document.write('"language": "en",<br/>')
+                document.write('"key": "body",<br/>')
+                document.write('"translation": ""<br/>')
+                document.write('}<br/>')
+                document.write('],<br/>')
+                document.write('"identifications": [<br/>')
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "offsetTop",<br/>')
+                document.write('"value": "1"<br/>')
+                document.write('},<br/>')
+                if (etape.nom != undefined) {
+                    document.write('{<br/>')
+                    document.write('"language": "default",<br/>')
+                    document.write('"key": "elementId",<br/>')
+                    document.write('"value": ' + JSON.stringify(etape.nom) + '<br/>')
+                    document.write('},<br/>')
+                }
+
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "attachPosition",<br/>')
+
+                i = 0
+                v = 0
+                x = 0
+                for (let element of etape.recurrence_pos_attache) {
+                    if (element > v) {
+                        x = i
+                        v = element
+
+                    }
+                    i += 1
+                }
+
+                document.write('"value": ' + JSON.stringify(etape.position_attache[x]) + '<br/>')
+                document.write('},<br/>')
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "offsetLeft",<br/>')
+                document.write('"value": "16"<br/>')
+                document.write('},<br/>')
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "arrowPosition",<br/>')
+
+                i = 0
+                v = 0
+                x = 0
+                for (let element of etape.recurrence_pos_fleche) {
+                    if (element > v) {
+                        x = i
+                        v = element
+
+                    }
+                    i += 1
+                }
+                document.write('"value": ' + JSON.stringify(etape.position_fleche[x]) + ' <br/>')
+                document.write('},<br/>')
+                document.write('{<br/>')
+                document.write('"language": "default",<br/>')
+                document.write('"key": "conditions",<br/>')
+                document.write('"value": "[]"<br/>')
+                document.write('}<br/>')
+                document.write(']<br/>')
+                if (j === l - 1) {
+                    document.write('}<br/>')
+
+                }
+                if (j !== l - 1) {
+                    document.write('},<br/>')
+                }
+
+
+
+
+                j += 1
+            }
+            document.write('],<br/>')
+            document.write('"translations": [<br/>')
+            document.write('{<br/>')
+            document.write('"language": "default",<br/>')
+            document.write('"key": "title",<br/>')
+            document.write('"translation": "Magasin"<br/>')
+            document.write('}<br/>')
+            document.write(']<br/>')
+            document.write('}<br/>')
+            document.write(']<br/>')
+            document.write('}<br/>')
+        }
+
+        //_____________________________________________________________________________________________________________________________________________________________________________________________________________
+        if (document.getElementById("Diagram").checked) {
+            /*
+            document.write('{<br/>')
+            document.write('"steps": [<br/>')
+            let i = 0
+            //let cx = 0
+            //let cy = 0
+
+            var liste_place = []
+
+            for (let element of liste_des_etapes) {
+
+                document.write('{<br/>')
+                if (element.nom != undefined) {
+                    document.write('"name": ' + JSON.stringify(element.nom) + ',<br/>')
+                }
+                if (element.nom == undefined) {
+                    document.write('"name": "undefined",<br/>')
+                }
+                document.write('"onPreDisplayEvent": "",<br/>')
+                document.write('"onDisplayedEvent": "",<br/>')
+                document.write('"paragraphs": [<br/>')
+
+                let ii = 0
+
+                for (let item of element.etapes_suivantes) {
+
+                    document.write('{<br/>')
+                    document.write('"type": "path",<br/>')
+                    document.write('"text": "' + element.recurrence_etapes_suivantes[ii] + '",<br/>')
+
+                    if (item != undefined) {
+                        document.write('"toStep": ' + JSON.stringify(item) + ',<br/>')
+                    }
+                    if (item == undefined) {
+                        document.write('"toStep": "undefined",<br/>')
+                    }
+
+                    document.write('"isTextJavascript": false,<br/>')
+                    document.write('"isVisibleJavascript": "",<br/>')
+                    document.write('"onClickEvent": ""<br/>')
+
+                    if (ii < element.etapes_suivantes.length - 1) {
+                        document.write('},<br/>')
+
+                    }
+
+                    if (ii === element.etapes_suivantes.length - 1) {
+                        document.write('}<br/>')
+
+                    }
+                    ii += 1
+                }
+
+
+                document.write('],<br/>')
+
+
+
+                //let pos_x = (liste_des_etapes.length + element.etapes_suivantes.length * 10) * 1.5 * Math.cos(2 * Math.PI * 10*parseInt(i/10) / liste_des_etapes.length) + 50 * Math.cos(2 * Math.PI * i /10)
+                //let pos_y = (liste_des_etapes.length + element.etapes_suivantes.length * 10) * 1.5 * Math.sin(2 * Math.PI * 10*parseInt(i/10) / liste_des_etapes.length) + 50 * Math.sin(2 * Math.PI * i /10)
+
+                let pos_x = (liste_des_etapes.length) * 2 * Math.cos(2 * Math.PI * parseInt(i) / liste_des_etapes.length)
+                let pos_y = (liste_des_etapes.length) * 2 * Math.sin(2 * Math.PI * parseInt(i) / liste_des_etapes.length)
+
+                document.write('"x": ' + pos_x + ',<br/>')
+                document.write('"y": ' + pos_y + '<br/>')
+
+
+                liste_place.push(
+                    {
+                        nom: element.nom,
+                        x: pos_x,
+                        y: pos_y
+                    }
+
+                )
+                //document.write('"x": '+ cx*20 + ',<br/>')
+                //document.write('"y": '+ cy*10 + '<br/>')
+
+                //if (element.etapes_suivantes.length === 0) {
+                //    cx += 1
+                //    cy = 0
+
+                //}
+
+                if (i < liste_des_etapes.length - 1) {
+                    document.write('},<br/>')
+
+                }
+
+                if (i === liste_des_etapes.length - 1) {
+                    document.write('}<br/>')
+
+                }
+                //cy += 1
+                i += 1
+
+            }
+
+
+            document.write('],<br/>')
+            document.write('"settings": {<br/>')
+            document.write('"projectName": "",<br/>')
+            document.write('"startingStep": "",<br/>')
+            document.write('"customStyle": ""<br/>')
+            document.write('}<br/>')
+            document.write('}<br/>')
+            */
+            // Initialize the echarts instance based on the prepared dom
+
+            //import * as echarts from 'C:\Users\ValentinJousseaume\node_modules\echarts\dist\echarts.js';
+
+            let ROOT_PATH = 'https://echarts.apache.org/examples';
+
+            let chartDom = document.getElementById('main');
+
+            echarts.dispose(chartDom)
+
+            let myChart = echarts.init(chartDom);
+            var option;
+
+            //colorations ___________________________________________________________________________________________________________
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_connect") {
+
+                var json = {
+                    "nodes": [],
+                    "links": [],
+                    "categories": [
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = 0" : "Nb of connected\nelements = 0"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = 1" : "Nb of connected\nelements = 1"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = 2" : "Nb of connected\nelements = 2"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = [3,5[" : "Nb of connected\nelements = [3,5["
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = [5,10[" : "Nb of connected\nelements = [5,10["
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées = [10,20[" : "Nb of connected\nelements = [10,20["
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Nb d'éléments\nconnectées >= 20" : "Nb of connected\nelements >= 20"
+                        }
+                    ]
+                }
+            }
+
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_rec") {
+
+                var json = {
+                    "nodes": [],
+                    "links": [],
+                    "categories": [
+                        {
+                            "name": document.getElementById("FR").checked ? "Utilisés une fois" : "Used once"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Utilisés plusieurs fois" : "Used multiple times"
+                        }
+
+                    ]
+                }
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_start") {
+
+                var json = {
+                    "nodes": [],
+                    "links": [],
+                    "categories": [
+                        {
+                            "name": document.getElementById("FR").checked ? "Débuts systématiques" : "Systematic starts"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Fins systématiques" : "Systematic ends"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Débuts, parfois" : "Starts, sometimes"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Fins, parfois" : "Ends, sometimes"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Débuts et fins" : "Starts and ends"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Étapes intermédiaires" : "Intermediate steps"
+                        }
+
+                    ]
+                }
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_cond") {
+                var json = {
+                    "nodes": [],
+                    "links": [],
+                    "categories": [
+                        {
+                            "name": document.getElementById("FR").checked ? 'Systématiquement avec la condition "' + document.getElementById("condi").options[document.getElementById("condi").selectedIndex].value + '"'
+                                : 'Systematically with the condition "' + document.getElementById("condi").options[document.getElementById("condi").selectedIndex].value + '"'
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? 'Avec parfois la condition' : 'Sometimes with the condition '
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Sans la condition" : "Without the condition"
+                        }
+
+                    ]
+                }
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_msg") {
+
+                var json = {
+                    "nodes": [],
+                    "links": [],
+                    "categories": [
+                        {
+                            "name": document.getElementById("FR").checked ? "Un seul message" : "One message"
+                        },
+                        {
+                            "name": document.getElementById("FR").checked ? "Plusieurs messages" : "Different messages"
+                        }
+
+                    ]
+                }
+            }
+
+
+
+
+
+            let i = 0
+
+            let final_name = ""
+            let final_nb_nexts = 0
+            let final_value = 0
+            let final_category = 0
+            let taille_max = 0
+            let liste_arrivee = []
+            let color_max = 0
+
+            let color_value_bis = 0
+
+            for (let element of liste_des_etapes) {
+
+                color_value_bis = 0
+                for (let guidage_colo of element.guidages) {
+                    for (let etape_colo of guidage_colo.position) {
+                        for (let element_colo of colo_hit_data) {
+
+                            if (element_colo.nom === (guidage_colo.nom + "#" + etape_colo)) {
+                                color_value_bis += element_colo.rec
+                            }
+
+                        }
+                    }
+                }
+
+                if (color_value_bis > color_max) {
+                    color_max = color_value_bis
+                }
+
+            }
+
+
+
+            for (let element of liste_des_etapes) {
+                let somme_rec = 0
+                if (!(document.getElementById("without_undefined").checked && element.nom == undefined)) {
+                    for (let valeur_rec of element.recurrence_mots) {
+                        somme_rec += valeur_rec
+                    }
+                    if (taille_max < somme_rec) {
+                        taille_max = somme_rec
+                    }
+
+                }
+            }
+
+            for (let element of liste_des_etapes) {
+
+                let link_final_target = ""
+
+                let ii = 0
+
+                for (let item of element.etapes_suivantes) {
+
+
+
+                    if (item != undefined) {
+                        link_final_target = JSON.stringify(item)
+                    }
+                    if (item == undefined) {
+                        link_final_target = "undefined"
+                    }
+                    trouve_arrivee = false
+                    for (let x of liste_arrivee) {
+                        if (link_final_target === x.nom_arrivee) {
+                            x.iter += 1
+                            x.iter_cumul += element.recurrence_etapes_suivantes[ii]
+                            trouve_arrivee = true
+                        }
+                    }
+
+                    if (!trouve_arrivee) {
+                        liste_arrivee.push({
+                            nom_arrivee: link_final_target,
+                            iter: 1,
+                            iter_cumul: element.recurrence_etapes_suivantes[ii]
+                        })
+                    }
+
+                    ii += 1
+
+                }
+            }
+
+
+
+
+            for (let element of liste_des_etapes) {
+
+
+                if (element.nom != undefined) {
+                    final_name = JSON.stringify(element.nom)
+                }
+                if (element.nom == undefined) {
+                    final_name = "undefined"
+                }
+
+                let ii = 0
+                let link_final_source = ""
+                let link_final_target = ""
+                let compteur_etapes_suivantes = 0
+                let compteur_cumul = 0
+
+
+
+
+                for (let item of element.etapes_suivantes) {
+
+                    //compteur_etapes_suivantes += element.recurrence_etapes_suivantes[ii]
+                    link_final_source = final_name
+
+                    if (item != undefined) {
+                        link_final_target = JSON.stringify(item)
+                    }
+                    if (item == undefined) {
+                        link_final_target = "undefined"
+                    }
+
+
+                    let trouve = false
+                    for (let x of json.links) {
+                        if (x.source === link_final_source && x.target === link_final_target) {
+                            trouve = true
+                            x.lineStyle["width"] += (element.recurrence_etapes_suivantes[ii]) * 5 / taille_max
+                            compteur_cumul += element.recurrence_etapes_suivantes[ii]
+                            if (colo_hit_data.length === 0) { x.value += element.recurrence_etapes_suivantes[ii] }
+
+                            x.symbolSize[1] += (element.recurrence_etapes_suivantes[ii]) * 10 / taille_max
+
+                        }
+
+                    }
+
+
+                    if (!trouve) {
+
+                        if (colo_hit_data.length === 0) {
+                            json.links.push({
+                                source: link_final_source,
+                                target: link_final_target,
+                                value: element.recurrence_etapes_suivantes[ii],
+                                symbol: ["circle", "arrow"],
+                                symbolSize: [1, 6 + (element.recurrence_etapes_suivantes[ii]) * 10 / taille_max],
+                                lineStyle: {
+                                    width: 1 + (element.recurrence_etapes_suivantes[ii]) * 5 / taille_max,
+                                    color: "#333333",
+                                    opacity: 0.7
+                                }
+
+
+                            })
+                        }
+                        if (colo_hit_data.length > 0) {
+                            json.links.push({
+                                source: link_final_source,
+                                target: link_final_target,
+
+                                symbol: ["circle", "arrow"],
+                                symbolSize: [1, 6 + (element.recurrence_etapes_suivantes[ii]) * 10 / taille_max],
+                                lineStyle: {
+                                    width: 1 + (element.recurrence_etapes_suivantes[ii]) * 5 / taille_max,
+                                    color: "#333333",
+                                    opacity: 0.7
+                                }
+
+
+                            })
+                        }
+
+
+                        compteur_cumul += element.recurrence_etapes_suivantes[ii]
+
+                    }
+                    ii += 1
+                }
+                compteur_etapes_suivantes = element.etapes_suivantes.length
+                final_value_bis = compteur_cumul
+
+
+
+                final_value = compteur_etapes_suivantes
+
+                //let pos_x = (liste_des_etapes.length) * 1.5 * Math.cos(2 * Math.PI * 10*parseInt(i/10) / liste_des_etapes.length) + 50 * Math.cos(2 * Math.PI * i /10)
+                //let pos_y = (liste_des_etapes.length) * 1.5 * Math.sin(2 * Math.PI * 10*parseInt(i/10) / liste_des_etapes.length) + 50 * Math.sin(2 * Math.PI * i /10)
+
+                let pos_x = (liste_des_etapes.length) * 2 * Math.cos(2 * Math.PI * parseInt(i) / liste_des_etapes.length)
+                let pos_y = (liste_des_etapes.length) * 2 * Math.sin(2 * Math.PI * parseInt(i) / liste_des_etapes.length)
+
+                let compteur_rec_mot = 0
+                for (let nb_rec of element.recurrence_mots) {
+                    compteur_rec_mot += nb_rec
+                }
+                final_nb_nexts = compteur_rec_mot
+
+                //document.write('"x": '+ cx*20 + ',<br/>')
+                //document.write('"y": '+ cy*10 + '<br/>')
+
+                //if (element.etapes_suivantes.length === 0) {
+                //    cx += 1
+                //    cy = 0
+
+                //}
+
+
+
+                //cy += 1
+                let x = 0
+                let xx = 0
+
+                for (let val of liste_arrivee) {
+                    if (final_name === val.nom_arrivee) {
+                        x = val.iter
+                        xx = val.iter_cumul
+                    }
+
+                }
+
+
+
+                if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_connect") {
+
+                    if (compteur_etapes_suivantes + x === 0) {
+                        final_category = 0
+                    }
+
+                    if (compteur_etapes_suivantes + x === 1) {
+                        final_category = 1
+                    }
+
+                    if (compteur_etapes_suivantes + x === 2) {
+                        final_category = 2
+                    }
+
+                    if (compteur_etapes_suivantes + x >= 3 && compteur_etapes_suivantes + x < 5) {
+                        final_category = 3
+                    }
+
+                    if (compteur_etapes_suivantes + x >= 5 && compteur_etapes_suivantes + x < 10) {
+                        final_category = 4
+                    }
+
+                    if (compteur_etapes_suivantes + x >= 10 && compteur_etapes_suivantes + x < 20) {
+                        final_category = 5
+                    }
+
+                    if (compteur_etapes_suivantes + x >= 20) {
+                        final_category = 6
+                    }
+
+                }
+
+
+                if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_rec") {
+
+                    if (final_nb_nexts === 1) {
+                        final_category = 0
+
+
+                    }
+
+                    if (final_nb_nexts >= 2) {
+                        final_category = 1
+
+                    }
+
+                }
+
+                if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_start") {
+
+
+
+
+                    if (element.debut > 0 && element.debut < final_nb_nexts) {
+                        final_category = 2
+
+                    }
+                    if (element.debut === final_nb_nexts) {
+                        final_category = 0
+
+
+                    }
+                    if (final_nb_nexts > final_value_bis && element.debut === 0) {
+                        final_category = 3
+
+                    }
+
+                    if (final_value_bis === 0) {
+                        final_category = 1
+
+                    }
+                    if ((element.fin > 0 && element.debut > 0 && element.debut < final_nb_nexts) || (final_value_bis === 0 && xx === 0)) {
+                        final_category = 4
+
+                    }
+
+                    if (final_nb_nexts <= final_value_bis && element.debut === 0) {
+                        final_category = 5
+
+                    }
+                    //console.log("Element :" + element.nom + ", nb fin :" + element.fin)
+
+
+
+                }
+
+                if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_cond") {
+
+
+                    final_category = 2
+                    let compteur_cond = 0
+                    for (let truc_i = 0; truc_i < element.conditions.length; truc_i++) {
+                        if (element.conditions[truc_i] === document.getElementById("condi").options[document.getElementById("condi").selectedIndex].value) {
+                            final_category = 1
+                            compteur_cond += element.recurrence_conditions[truc_i]
+                        }
+
+                    }
+
+
+                    if (compteur_cond === final_nb_nexts) {
+                        final_category = 0
+                    }
+
+
+                }
+
+                if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_msg") {
+                    final_category = element.mots.length > 1 ? 1 : 0
+
+
+                }
+
+
+
+                let color_value = 0
+
+                if (colo_hit_data.length > 0) {
+                    for (let guidage_colo of element.guidages) {
+                        for (let etape_colo of guidage_colo.position) {
+                            for (let element_colo of colo_hit_data) {
+
+                                if (element_colo.nom === (guidage_colo.nom + "#" + etape_colo)) {
+                                    color_value += element_colo.rec
+                                }
+
+                            }
+                        }
+                    }
+                }
+
+
+
+
+                let max_message = ""
+                let val_indice = 0
+
+                for (let kkk = 0; kkk < element.mots.length; kkk++) {
+                    if (val_indice < element.recurrence_mots[kkk]) {
+                        val_indice = element.recurrence_mots[kkk]
+                        max_message = element.mots[kkk]
+                    }
+
+                }
+
+                let final_color_R = 0
+                let final_color_G = 0
+                let final_color_B = 0
+
+                if (color_value / color_max >= 0) {
+                    final_color_B = 225
+                    final_color_G = 225 * 4 * (color_value / color_max)
+
+                }
+                if (color_value / color_max >= 0.25) {
+                    final_color_G = 225
+                    final_color_B = 225 * (1 - (4 * ((color_value / color_max) - 0.25)))
+                }
+                if (color_value / color_max >= 0.5) {
+                    final_color_G = 225
+                    final_color_R = 225 * 4 * ((color_value / color_max) - 0.5)
+                }
+                if (color_value / color_max >= 0.75) {
+                    final_color_R = 225
+                    final_color_G = 225 * (1 - (4 * ((color_value / color_max) - 0.75)))
+
+                }
+
+
+
+
+                if (colo_hit_data.length !== 0) {
+                    json.nodes.push({
+                        id: final_name,
+                        name: final_name + ' ("' + max_message.slice(0, 50) + '...")',
+                        symbolSize: 30 * (final_nb_nexts) / taille_max + 1.5,
+                        x: pos_x,
+                        y: pos_y,
+                        value: color_value,
+                        itemStyle: {
+                            color: "rgba(" + final_color_R + "," + final_color_G + "," + final_color_B + ",1)"
+                        }
+
+
+                    })
+                }
+
+                if (colo_hit_data.length === 0) {
+                    json.nodes.push({
+                        id: final_name,
+                        name: final_name + ' ("' + max_message.slice(0, 50) + '...")',
+                        symbolSize: 30 * (final_nb_nexts) / taille_max + 1.5,
+                        x: pos_x,
+                        y: pos_y,
+                        value: document.getElementById("FR").checked ? "Nb suivants : " + final_value + "/" + final_value_bis + ", Nb arrivée : " + x + "/" + xx + ", Récurrence : " + final_nb_nexts :
+                            "Nb of nexts: " + final_value + "/" + final_value_bis + ", Nb of arrivals: " + x + "/" + xx + ", Recurrence: " + final_nb_nexts,
+                        category: final_category,
+
+
+                    })
+
+                }
+
+
+
+                i += 1
+
+                if (document.getElementById("without_undefined").checked) {
+                    let c = 0
+                    for (let valeur of json.nodes) {
+                        if (valeur.id === "undefined") {
+                            json.nodes.splice(c, 1)
+
+                        }
+                        c += 1
+                    }
+                    c = 0
+                    for (let valeur of json.links) {
+                        if (valeur.source === "undefined" || valeur.target === "undefined") {
+                            json.links.splice(c, 1)
+
+                        }
+
+
+                        c += 1
+
+                    }
+
+                }
+            }
+
+            //------------couleur ----------------------------------------
+
+            let couleur = []
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_connect") {
+                couleur = [
+                    "#8600EF",
+                    "#0400EF",
+                    "#60BEFF",
+                    "#05C24D",
+                    "#F0D811",
+                    "#F58F04",
+                    "#E30000"]
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_rec") {
+                couleur = [
+                    "#5D00BD",
+                    "#F37104"]
+            }
+
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_start") {
+                couleur = [
+                    "#0400EF",
+                    "#E30000",
+                    "#60BEFF",
+                    "#F58F04",
+                    "#F0D811",
+                    "#05C24D"]
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_cond") {
+                couleur = [
+                    "#0400EF",
+                    "#60BEFF",
+                    "#F58F04"]
+
+            }
+
+            if (document.Choix.Liste.options[document.Choix.Liste.selectedIndex].value === "Colo_msg") {
+                couleur = [
+                    "#0400EF",
+                    "#E30000"]
+
+
+            }
+
+
+
+
+            let ratio_affiche = json.nodes.length
+
+            var calcule_select_moyenne = 0;
+            let calcule_select_nb = 0;
+
+
+            copie_liste = JSON.parse(JSON.stringify(json.nodes))
+            liste_mediane = []
+
+            for (let inutile1 of json.nodes) {
+                let max_mediane = 0
+                let index_max = 0
+                for (let x = 0; x < copie_liste.length; x++) {
+
+                    let s = 0
+                    for (let rec of json.links) {
+                        if (rec.target === copie_liste[x].id || rec.source === copie_liste[x].id) {
+
+                            s += 1
+                        }
+                    }
+
+                    if (s > max_mediane) {
+                        max_mediane = s
+                        index_max = x
+                    }
+                }
+                liste_mediane.push(max_mediane)
+                copie_liste.splice(index_max, 1)
+
+            }
+            mediane_liens_node = liste_mediane[parseInt(liste_mediane.length / 2)]
+
+            console.log("")
+            console.log("Moyenne de liens par node : " + parseInt(100 * json.links.length / json.nodes.length) / 100)
+            console.log("Mediane de liens par node : " + parseInt(100 * mediane_liens_node) / 100)
+
+
+            //myChart.showLoading();
+
+            myChart.hideLoading();
+            //json.nodes.forEach(function (node) {
+            //node.symbolSize = 5;
+
+            //});
+
+            if (colo_hit_data.length > 0) {
+                option = {
+                    title: {
+                        backgroundColor: '#333',
+                        text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + calcule_select_moyenne + "\nNb selectionnés : " + 0 + " / " + ratio_affiche :
+                            'Values:\n' + "Average: " + 0 + "\nNb selected: " + 0 + " / " + ratio_affiche,
+                        bottom: 0,
+                        right: '10%',
+                        width: 100,
+                        textStyle: {
+                            fontSize: 12,
+                            color: '#fff'
+                        }
+                    },
+
+                    tooltip: {
+                        formatter: '<strong>{a}</strong><br />{b}<br />{c}',
+                        confine: true,
+                        textStyle: {
+                            fontSize: 12
+                        }
+
+
+                    },
+                    visualMap: {
+                        min: 0,
+                        max: color_max,
+                        orient: 'horizontal',
+                        right: 'center',
+                        top: 20,
+                        itemHeight: 900,
+                        text: ['Nb hits max', 'Nb hits min'],
+                        calculable: false,
+                        inRange: {
+                            color: ['rgba(0,0,225,1)', 'rgba(0,225,225,1)', 'rgba(0,225,0,1)', 'rgba(225,225,0,1)', 'rgba(255,0,0,1)']
+                        }
+                    },
+                    toolbox: {
+                        feature: {
+                            saveAsImage: {}
+                        }
+                    },
+
+                    series: [
+                        {
+                            name: document.getElementById("FR").checked ? 'Élément :' : 'Element',
+                            type: 'graph',
+                            layout: 'force',
+                            data: json.nodes,
+                            links: json.links,
+                            categories: json.categories,
+                            lineStyle: {
+                                curveness: 0.02,
+
+                            },
+                            emphasis: {
+                                focus: "adjacency",
+                                scale: false,
+                                lineStyle: {
+                                    color: "#000000",
+                                    opacity: 1
+                                }
+                            },
+                            blur: {
+                                itemStyle: {
+                                    opacity: 0.4
+                                },
+                                lineStyle: {
+                                    opacity: 0.2
+                                }
+                            },
+
+                            roam: true,
+                            draggable: true,
+                            select: {
+                                label: {
+                                    show: true,
+                                    width: 300,
+                                    overflow: "break"
+                                },
+                                itemStyle: {
+                                    borderWidth: 3
+
+                                }
+                            },
+                            selectedMode: "multiple",
+                            label: {
+                                position: 'right'
+                            },
+                            force: {
+                                repulsion: 150,
+                                edgeLength: 1,
+                                gravity: 0.2,
+                                friction: 0.2
+                            }
+                        }
+                    ]
+                };
+            }
+
+            if (colo_hit_data.length === 0) {
+                option = {
+                    title: {
+                        backgroundColor: '#333',
+                        text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + 0 + "\nNb selectionnés : " + 0 + " / " + ratio_affiche :
+                            'Values:\n' + "Average: " + 0 + "\nNb selected: " + 0 + " / " + ratio_affiche,
+                        bottom: 0,
+                        right: '10%',
+                        width: 100,
+                        textStyle: {
+                            fontSize: 12,
+                            color: '#fff'
+                        }
+                    },
+
+                    tooltip: {
+                        formatter: '<strong>{a}</strong><br />{b}<br />{c}',
+                        confine: true,
+                        textStyle: {
+                            fontSize: 12
+                        }
+
+
+                    },
+                    legend: [
+                        {
+                            // selectedMode: 'single',
+                            data: json.categories.map(function (a) {
+                                return a.name;
+                            }),
+                            emphasis: false
+                        }
+                    ],
+                    toolbox: {
+                        feature: {
+                            saveAsImage: {}
+                        }
+                    },
+
+                    series: [
+                        {
+                            name: document.getElementById("FR").checked ? 'Élément :' : 'Element',
+                            type: 'graph',
+                            layout: 'force',
+                            data: json.nodes,
+                            links: json.links,
+                            categories: json.categories,
+                            color: couleur,
+                            lineStyle: {
+                                curveness: 0.02,
+
+                            },
+                            emphasis: {
+                                focus: "adjacency",
+                                scale: false,
+                                lineStyle: {
+                                    color: "#000000",
+                                    opacity: 1
+                                }
+                            },
+                            blur: {
+                                itemStyle: {
+                                    opacity: 0.4
+                                },
+                                lineStyle: {
+                                    opacity: 0.2
+                                }
+                            },
+
+                            roam: true,
+                            draggable: true,
+                            select: {
+                                label: {
+                                    show: true,
+                                    width: 300,
+                                    overflow: "break"
+                                },
+                                itemStyle: {
+                                    borderWidth: 3
+
+                                }
+                            },
+                            selectedMode: "multiple",
+                            label: {
+                                position: 'right'
+                            },
+                            force: {
+                                repulsion: 150,
+                                edgeLength: 1,
+                                gravity: 0.2,
+                                friction: 0.2
+                            }
+                        }
+                    ]
+                };
+            }
+            myChart.setOption(option, false);
+
+            //option && myChart.setOption(option, true);
+
+
+
+            if (file.name === liste_selection.fichier) {
+                myChart.dispatchAction({
+                    type: 'select',
+                    dataIndex: liste_selection.liste
+                })
+
+            }
+
+            if (!(file.name === liste_selection.fichier)) {
+                liste_selection.liste = []
+                liste_selection.fichier = file.name
+
+
+            }
+
+
+
+
+            myChart.on('legendselectchanged', function (params) {
+
+
+                ratio_affiche = 0
+
+
+                for (let l = 0; l < json.nodes.length; l++) {
+
+                    if (params.selected[json.categories[json.nodes[l]["category"]].name]) {
+                        ratio_affiche += 1
+                    }
+
+                }
+
+
+                myChart.setOption({
+                    title: {
+                        backgroundColor: '#333',
+                        text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + calcule_select_moyenne + "\nNb selectionnés : " + calcule_select_nb + " / " + ratio_affiche :
+                            'Values:\n' + "Average: " + calcule_select_moyenne + "\nNb selected: " + calcule_select_nb + " / " + ratio_affiche,
+                        bottom: 0,
+                        right: '10%',
+                        width: 100,
+                        textStyle: {
+                            fontSize: 12,
+                            color: '#fff'
+                        }
+                    }
+                });
+
+
+            })
+
+            let aborted_mission = false
+
+
+
+
+            myChart.on('click', function (params) {
+
+                if (!aborted_mission && params.dataType == "node") {
+
+
+
+                    console.clear()
+
+                    warn_first_time = false
+
+                    if (document.getElementById("pourcent_bas").value <= 100) {
+
+                        for (let k1 = 0; k1 < liste_tous_messages.length; k1++) {
+                            liste_de_mots1 = liste_tous_messages[k1].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                        "<em>", "").replaceAll("&#39;", "'")
+
+                            for (let k2 = k1 + 1; k2 < liste_tous_messages.length; k2++) {
+
+
+                                liste_de_mots2 = liste_tous_messages[k2].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                    "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                        "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                            "<em>", "").replaceAll("&#39;", "'")
+
+                                score_simi = 0
+
+
+
+
+                                score_simi = simi_msg(liste_de_mots1, liste_de_mots2)
+
+                                if ((score_simi >= document.getElementById("pourcent_bas").value / 100) && (score_simi <= document.getElementById("pourcent_haut").value / 100)) {
+                                    if (!warn_first_time) {
+                                        console.warn("Messages similaires dans différents éléments :")
+                                        console.log("")
+                                        warn_first_time = true
+                                    }
+                                    console.warn("Similarité : " + parseInt(score_simi * 10000) / 100 + "%")
+                                    console.log("Message n°1 : " + liste_tous_messages[k1].message)
+                                    console.log("Message n°2 : " + liste_tous_messages[k2].message)
+                                    console.log("Element n°1 : " + liste_tous_messages[k1].element)
+                                    console.log("Element n°2 : " + liste_tous_messages[k2].element)
+                                    console.log("")
+                                }
+
+
+
+                            }
+
+                        }
+                    }
+
+                    console.log("%cNom du batch : " + file.name, "color:#000000;font-weight:bold;")
+                    console.log("")
+
+                    console.log("%cMétriques :", "color:#000000;font-weight:bold;")
+                    console.log("Nombre d'éléments d'attache : " + parseInt(100 * liste_des_etapes.length) / 100);
+                    console.log("Nombre de guidages : " + parseInt(100 * obj_json_source.guidances.length) / 100);
+                    console.log("Nombre d'étapes : " + parseInt(100 * somme_etapes) / 100)
+                    console.log("Nombre d'éléments d'attache avec plusieurs messages : " + parseInt(100 * nb_etapes_plusieurs_messages) / 100);
+                    console.log("Nombre de messages différents par élément cumulés : " + parseInt(100 * compteur_messages) / 100);
+                    console.log(" ")
+                    console.log("Moyenne du nombre d'étapes par guidage : " + parseInt(100 * moyenne_taille_guidage) / 100);
+                    console.log("Médiane du nombre d'étapes par guidage : " + parseInt(100 * mediane_taille_guidage) / 100);
+                    console.log("Moyenne du nombre de messages pour un élément d'attache : " + parseInt(100 * moyenne_messages_etapes) / 100);
+                    console.log("Médiane du nombre de messages pour un élément d'attache : " + parseInt(100 * mediane_messages_etapes) / 100);
+                    //console.log("Moyenne de réutilisation d'un message par élément d'attache : " + moyenne_rec_int_etapes);
+                    console.log("Moyenne de réutilisation d'un élément d'attache : " + parseInt(100 * moyenne_rec_etapes) / 100);
+                    console.log("Médiane de réutilisation d'un élément d'attache : " + parseInt(100 * mediane_rec_etapes) / 100);
+
+                    console.log("")
+                    console.log("Moyenne de liens par node : " + parseInt(100 * json.links.length / json.nodes.length) / 100)
+                    console.log("Médiane de liens par node : " + parseInt(100 * mediane_liens_node) / 100)
+
+
+
+                    let item_selected = params.data.id
+
+                    let deja_select = -1
+
+
+                    let item_selected_indice
+
+                    for (let indice_truc = 0; indice_truc < option.series[0].data.length; indice_truc++) {
+                        if (item_selected === option.series[0].data[indice_truc].id) {
+                            item_selected_indice = indice_truc
+
+                        }
+                    }
+
+
+
+                    for (let element_indice = 0; element_indice < liste_selection.liste.length; element_indice++) {
+                        if (liste_selection.liste[element_indice] === item_selected_indice) {
+                            deja_select = element_indice
+
+                        }
+
+                    }
+
+                    if (deja_select > -1) {
+                        liste_selection.liste.splice(deja_select, 1)
+                    }
+
+                    if (deja_select === -1) {
+                        liste_selection.liste.push(item_selected_indice)
+                    }
+
+                    let c = 0
+                    if (liste_selection.liste.length > 0) {
+                        console.log("")
+                        console.log("%cSélection : ", "color:#000000;font-weight:bold;")
+
+                        console.log("")
+                    }
+
+
+
+                    calcule_select_moyenne = 0;
+                    calcule_select_nb = 0;
+
+
+                    if (document.getElementById("FR").checked) {
+
+                        for (let valeur of liste_selection.liste) {
+
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+
+
+
+                            }
+
+                            c += 1
+
+                        }
+
+                    }
+
+                    if (!document.getElementById("FR").checked) {
+
+                        for (let valeur of liste_selection.liste) {
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+                            }
+
+                            c += 1
+
+                        }
+                    }
+
+                    calcule_select_moyenne = calcule_select_moyenne / c
+                    calcule_select_nb = c
+
+                    myChart.setOption({
+                        title: {
+                            backgroundColor: '#333',
+                            text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + calcule_select_moyenne + "\nNb selectionnés : " + calcule_select_nb + " / " + ratio_affiche :
+                                'Values:\n' + "Average : " + calcule_select_moyenne + "\nNb selected: " + calcule_select_nb + " / " + ratio_affiche,
+                            bottom: 0,
+                            right: '10%',
+                            width: 100,
+                            textStyle: {
+                                fontSize: 12,
+                                color: '#fff'
+                            }
+                        }
+                    });
+
+
+                }
+
+                aborted_mission = false
+
+
+
+            });
+
+
+            //----------------------------------------------selection par guidages-----------------------------------------------------------------------------
+
+            let liste_des_guidages = []
+
+            for (let etape_guid of liste_des_etapes) {
+                for (let bidule1 of etape_guid.guidages) {
+                    let trouve_guid = false
+                    for (let bidule2 of liste_des_guidages) {
+                        if (bidule1.nom === bidule2) {
+                            trouve_guid = true
+                        }
+
+                    }
+                    if (!trouve_guid) {
+                        liste_des_guidages.push(bidule1.nom)
+                    }
+
+
+
+                }
+            }
+            //console.log(liste_des_guidages)
+
+
+
+            liste_des_guidages.sort()
+            liste_des_guidages.unshift("Aucun")
+
+            let values = liste_des_guidages;
+
+            if (document.getElementById("guid") != undefined) {
+                document.getElementById("guid").remove()
+                document.getElementById("label_guid").remove()
+
+            }
+
+
+            let select = document.createElement("select");
+            select.name = "guid";
+            select.id = "guid"
+            select.oninput = function selection_function() {
+
+                let liste_unselect = []
+
+                for (let k = 0; k < json.nodes.length; k++) {
+                    liste_unselect.push(k)
+                }
+
+                aborted_mission = true
+                myChart.dispatchAction({
+                    type: 'unselect',
+                    dataIndex: liste_unselect
+                })
+
+                aborted_mission = false
+
+                liste_selection.liste = []
+                console.clear()
+
+                warn_first_time = false
+
+                if (document.getElementById("pourcent_bas").value <= 100) {
+
+                    for (let k1 = 0; k1 < liste_tous_messages.length; k1++) {
+                        liste_de_mots1 = liste_tous_messages[k1].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'")
+
+                        for (let k2 = k1 + 1; k2 < liste_tous_messages.length; k2++) {
+
+
+                            liste_de_mots2 = liste_tous_messages[k2].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                        "<em>", "").replaceAll("&#39;", "'")
+
+                            score_simi = 0
+
+
+
+                            score_simi = simi_msg(liste_de_mots1, liste_de_mots2)
+
+                            if ((score_simi >= document.getElementById("pourcent_bas").value / 100) && (score_simi <= document.getElementById("pourcent_haut").value / 100)) {
+                                if (!warn_first_time) {
+                                    console.warn("Messages similaires dans différents éléments :")
+                                    console.log("")
+                                    warn_first_time = true
+                                }
+                                console.warn("Similarité : " + parseInt(score_simi * 10000) / 100 + "%")
+                                console.log("Message n°1 : " + liste_tous_messages[k1].message)
+                                console.log("Message n°2 : " + liste_tous_messages[k2].message)
+                                console.log("Element n°1 : " + liste_tous_messages[k1].element)
+                                console.log("Element n°2 : " + liste_tous_messages[k2].element)
+                                console.log("")
+                            }
+
+
+
+                        }
+
+                    }
+                }
+
+                console.log("%cMétriques :", "color:#000000;font-weight:bold;")
+                console.log("Nombre d'éléments d'attache : " + parseInt(100 * liste_des_etapes.length) / 100);
+                console.log("Nombre de guidages : " + parseInt(100 * obj_json_source.guidances.length) / 100);
+                console.log("Nombre d'étapes : " + parseInt(100 * somme_etapes) / 100)
+                console.log("Nombre d'éléments d'attache avec plusieurs messages : " + parseInt(100 * nb_etapes_plusieurs_messages) / 100);
+                console.log("Nombre de messages différents par élément cumulés : " + parseInt(100 * compteur_messages) / 100);
+                console.log(" ")
+                console.log("Moyenne du nombre d'étapes par guidage : " + parseInt(100 * moyenne_taille_guidage) / 100);
+                console.log("Médiane du nombre d'étapes par guidage : " + parseInt(100 * mediane_taille_guidage) / 100);
+                console.log("Moyenne du nombre de messages pour un élément d'attache : " + parseInt(100 * moyenne_messages_etapes) / 100);
+                console.log("Médiane du nombre de messages pour un élément d'attache : " + parseInt(100 * mediane_messages_etapes) / 100);
+                //console.log("Moyenne de réutilisation d'un message par élément d'attache : " + moyenne_rec_int_etapes);
+                console.log("Moyenne de réutilisation d'un élément d'attache : " + parseInt(100 * moyenne_rec_etapes) / 100);
+                console.log("Médiane de réutilisation d'un élément d'attache : " + parseInt(100 * mediane_rec_etapes) / 100);
+
+                console.log("")
+                console.log("Moyenne de liens par node: " + parseInt(100 * json.links.length / json.nodes.length) / 100)
+                console.log("Mediane de liens par node: " + parseInt(100 * mediane_liens_node) / 100)
+
+
+                if (!(document.getElementById("guid").options[document.getElementById("guid").selectedIndex].value === "Aucun")) {
+
+
+
+                    let liste_a_select = []
+
+                    for (let node_indice = 0; node_indice < json.nodes.length; node_indice++) {
+                        for (let element_valeur of liste_des_etapes) {
+                            if (JSON.stringify(element_valeur.nom) === json.nodes[node_indice].id) {
+                                for (let guidage_element of element_valeur.guidages) {
+                                    if (guidage_element.nom === document.getElementById("guid").options[document.getElementById("guid").selectedIndex].value) {
+                                        liste_a_select.push(node_indice)
+                                    }
+
+                                }
+                            }
+
+                        }
+
+
+                    }
+
+                    aborted_mission = true
+
+                    myChart.dispatchAction({
+                        type: 'select',
+                        dataIndex: liste_a_select
+                    })
+
+                    aborted_mission = false
+
+                    liste_selection.liste = liste_a_select
+
+                    calcule_select_moyenne = 0;
+                    calcule_select_nb = 0;
+
+
+
+
+
+
+
+                    let c = 0
+                    if (liste_selection.liste.length > 0) {
+                        console.log("")
+                        console.log("%cSélection : ", "color:#000000;font-weight:bold;")
+                        console.log("")
+                    }
+
+
+
+                    if (document.getElementById("FR").checked) {
+
+                        for (let valeur of liste_selection.liste) {
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+
+
+                            }
+
+                            c += 1
+
+                        }
+
+                    }
+
+                    if (!document.getElementById("FR").checked) {
+                        for (let valeur of liste_selection.liste) {
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+                            }
+
+                            c += 1
+
+                        }
+                    }
+                    calcule_select_moyenne = calcule_select_moyenne / c
+                    calcule_select_nb = c
+
+                    myChart.setOption({
+                        title: {
+                            backgroundColor: '#333',
+                            text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + calcule_select_moyenne + "\nNb selectionnés : " + calcule_select_nb + " / " + ratio_affiche :
+                                'Values:\n' + "Average: " + calcule_select_moyenne + "\nNb selected: " + calcule_select_nb + " / " + ratio_affiche,
+                            bottom: 0,
+                            right: '10%',
+                            width: 100,
+                            textStyle: {
+                                fontSize: 12,
+                                color: '#fff'
+                            }
+                        }
+                    });
+
+
+
+
+
+
+                }
+
+
+
+            }
+
+            for (const val of values) {
+                var option_liste = document.createElement("option");
+                option_liste.value = val;
+                option_liste.text = val.charAt(0).toUpperCase() + val.slice(1);
+                select.appendChild(option_liste);
+            }
+
+            let label = document.createElement("label");
+            label.innerHTML = "Choisir un guidage spécifique : "
+            label.htmlFor = "guid";
+            label.id = "label_guid"
+
+            document.getElementById("container_guidages").appendChild(label).appendChild(select);
+
+            //----------------------------------------------selection par messages-----------------------------------------------------------------------------
+
+            let liste_des_messages = []
+
+            for (let etape_msg of liste_des_etapes) {
+                for (let bidule1 of etape_msg.mots) {
+                    let trouve_msg = false
+                    for (let bidule2 of liste_des_messages) {
+                        if (bidule1 === bidule2) {
+                            trouve_msg = true
+                        }
+
+                    }
+                    if (!trouve_msg) {
+                        liste_des_messages.push(bidule1)
+                    }
+
+
+
+                }
+            }
+            //console.log(liste_des_messages)
+
+            liste_des_messages.sort()
+
+            liste_des_messages.unshift("Aucun")
+
+            let values_messages = liste_des_messages;
+
+
+
+            if (document.getElementById("msg") != undefined) {
+                document.getElementById("msg").remove()
+                document.getElementById("label_msg").remove()
+
+            }
+
+
+            let select_messages = document.createElement("select");
+            select_messages.name = "msg";
+            select_messages.id = "msg"
+            select_messages.oninput = function selection_function_messages() {
+
+                let liste_unselect = []
+
+                for (let k = 0; k < json.nodes.length; k++) {
+                    liste_unselect.push(k)
+                }
+
+                aborted_mission = true
+
+                myChart.dispatchAction({
+                    type: 'unselect',
+                    dataIndex: liste_unselect
+                })
+                aborted_mission = false
+
+                liste_selection.liste = []
+
+                console.clear()
+
+                warn_first_time = false
+
+
+                if (document.getElementById("pourcent_bas").value <= 100) {
+
+                    for (let k1 = 0; k1 < liste_tous_messages.length; k1++) {
+                        liste_de_mots1 = liste_tous_messages[k1].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                            "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                    "<em>", "").replaceAll("&#39;", "'")
+
+                        for (let k2 = k1 + 1; k2 < liste_tous_messages.length; k2++) {
+
+
+                            liste_de_mots2 = liste_tous_messages[k2].message.replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                        "<em>", "").replaceAll("&#39;", "'")
+
+                            score_simi = 0
+
+
+
+
+                            score_simi = simi_msg(liste_de_mots1, liste_de_mots2)
+
+                            if ((score_simi >= document.getElementById("pourcent_bas").value / 100) && (score_simi <= document.getElementById("pourcent_haut").value / 100)) {
+                                if (!warn_first_time) {
+                                    console.warn("Messages similaires dans différents éléments :")
+                                    console.log("")
+                                    warn_first_time = true
+                                }
+                                console.warn("Similarité : " + parseInt(score_simi * 10000) / 100 + "%")
+                                console.log("Message n°1 : " + liste_tous_messages[k1].message)
+                                console.log("Message n°2 : " + liste_tous_messages[k2].message)
+                                console.log("Element n°1 : " + liste_tous_messages[k1].element)
+                                console.log("Element n°2 : " + liste_tous_messages[k2].element)
+                                console.log("")
+                            }
+
+
+
+                        }
+
+                    }
+                }
+
+                console.log("%cMétriques :", "color:#000000;font-weight:bold;")
+                console.log("Nombre d'éléments d'attache : " + parseInt(100 * liste_des_etapes.length) / 100);
+                console.log("Nombre de guidages : " + parseInt(100 * obj_json_source.guidances.length) / 100);
+                console.log("Nombre d'étapes : " + parseInt(100 * somme_etapes) / 100)
+                console.log("Nombre d'éléments d'attache avec plusieurs messages : " + parseInt(100 * nb_etapes_plusieurs_messages) / 100);
+                console.log("Nombre de messages différents par élément cumulés : " + parseInt(100 * compteur_messages) / 100);
+                console.log(" ")
+                console.log("Moyenne du nombre d'étapes par guidage : " + parseInt(100 * moyenne_taille_guidage) / 100);
+                console.log("Médiane du nombre d'étapes par guidage : " + parseInt(100 * mediane_taille_guidage) / 100);
+                console.log("Moyenne du nombre de messages pour un élément d'attache : " + parseInt(100 * moyenne_messages_etapes) / 100);
+                console.log("Médiane du nombre de messages pour un élément d'attache : " + parseInt(100 * mediane_messages_etapes) / 100);
+                //console.log("Moyenne de réutilisation d'un message par élément d'attache : " + moyenne_rec_int_etapes);
+                console.log("Moyenne de réutilisation d'un élément d'attache : " + parseInt(100 * moyenne_rec_etapes) / 100);
+                console.log("Médiane de réutilisation d'un élément d'attache : " + parseInt(100 * mediane_rec_etapes) / 100);
+
+                console.log("")
+                console.log("Moyenne de liens par node: " + parseInt(100 * json.links.length / json.nodes.length) / 100)
+                console.log("Mediane de liens par node: " + parseInt(100 * mediane_liens_node) / 100)
+
+
+
+                if (!(document.getElementById("msg").options[document.getElementById("msg").selectedIndex].value === "Aucun")) {
+
+
+
+                    let liste_a_select = []
+
+                    for (let node_indice = 0; node_indice < json.nodes.length; node_indice++) {
+                        for (let element_valeur of liste_des_etapes) {
+                            if (JSON.stringify(element_valeur.nom) === json.nodes[node_indice].id) {
+                                for (let messages_element of element_valeur.mots) {
+                                    if (messages_element === document.getElementById("msg").options[document.getElementById("msg").selectedIndex].value) {
+                                        liste_a_select.push(node_indice)
+                                    }
+
+                                }
+                            }
+
+                        }
+
+
+                    }
+
+                    aborted_mission = true
+
+                    myChart.dispatchAction({
+                        type: 'select',
+                        dataIndex: liste_a_select
+                    })
+
+                    aborted_mission = false
+
+                    liste_selection.liste = liste_a_select
+
+                    calcule_select_moyenne = 0;
+                    calcule_select_nb = 0;
+
+
+
+
+
+
+
+                    let c = 0
+                    if (liste_selection.liste.length > 0) {
+                        console.log("")
+                        console.log("%cSélection : ", "color:#000000;font-weight:bold;")
+                        console.log("")
+                    }
+
+
+                    if (document.getElementById("FR").checked) {
+
+                        for (let valeur of liste_selection.liste) {
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+
+
+                            }
+
+                            c += 1
+
+                        }
+
+                    }
+
+                    if (!document.getElementById("FR").checked) {
+                        for (let valeur of liste_selection.liste) {
+                            calcule_select_moyenne += colo_hit_data.length === 0 ? parseInt(option.series[0].data[valeur].value.split(": ")[3]) : parseInt(option.series[0].data[valeur].value)
+
+                            for (let item of liste_des_etapes) {
+
+
+                                if ((item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) === option.series[0].data[valeur].id) {
+                                    if (document.getElementById("select_guidage").checked) {
+                                        console.log("%cGuidages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.guidages.length; elements++) {
+                                            console.log("   - " + item.guidages[elements].nom + " (" + item.recurrence_guidages[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_messages").checked) {
+                                        console.log("%cmessages de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.mots.length; elements++) {
+                                            console.log("   - " + item.mots[elements].replaceAll("<br/>", "").replaceAll("<br />", "").replaceAll("<br  />", "").replaceAll("<strong>",
+                                                "").replaceAll("</strong>", "").replaceAll("<p>", "").replaceAll("</p>", "").replaceAll(
+                                                    "<ul>", "").replaceAll("</ul>", "").replaceAll("<li>", "").replaceAll("</li>", "").replaceAll("</em>", "").replaceAll(
+                                                        "<em>", "").replaceAll("&#39;", "'") + " (" + item.recurrence_mots[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+                                    if (document.getElementById("select_conditions").checked) {
+                                        console.log("%cConditions de " + (item.nom == undefined ? "undefined" : JSON.stringify(item.nom)) + " :", "color:#000000;font-weight:bold;")
+                                        for (let elements = 0; elements < item.conditions.length; elements++) {
+                                            console.log("   - " + item.conditions[elements] + " (" + item.recurrence_conditions[elements] + ")")
+                                        }
+                                        console.log("")
+
+                                    }
+
+
+
+
+                                }
+                            }
+
+                            c += 1
+
+                        }
+                    }
+                    calcule_select_moyenne = calcule_select_moyenne / c
+                    calcule_select_nb = c
+
+                    myChart.setOption({
+                        title: {
+                            backgroundColor: '#333',
+                            text: document.getElementById("FR").checked ? 'Valeurs :\n' + "Moyenne : " + calcule_select_moyenne + "\nNb selectionnés : " + calcule_select_nb + " / " + ratio_affiche :
+                                'Values:\n' + "Average: " + calcule_select_moyenne + "\nNb selected: " + calcule_select_nb + " / " + ratio_affiche,
+                            bottom: 0,
+                            right: '10%',
+                            width: 100,
+                            textStyle: {
+                                fontSize: 12,
+                                color: '#fff'
+                            }
+                        }
+                    });
+
+
+
+
+
+
+                }
+
+
+
+            }
+
+            for (const val of values_messages) {
+                var option_liste_msg = document.createElement("option");
+                option_liste_msg.value = val;
+                option_liste_msg.text = val.charAt(0).toUpperCase() + val.slice(1);
+                select_messages.appendChild(option_liste_msg);
+            }
+
+            let label_messages = document.createElement("label_messages");
+            label_messages.innerHTML = "   Choisir un message spécifique : "
+            label_messages.htmlFor = "msg";
+            label_messages.id = "label_msg"
+
+            document.getElementById("container_guidages").appendChild(label_messages).appendChild(select_messages);
+
+
+
+
+        }
+
+
+    }
+
+</script>
